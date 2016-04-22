@@ -11,10 +11,10 @@
 	   _FIRMWARE_TIMESTAMP_ = 1136603832
 
  	User System Info
-	   #define     PRODUCT_ID  "EMU1464"         // part #
+	   #define     PRODUCT_ID  "PID_001"         // part #
 	   #define     VERSION  "1.2.2"              // should be "X.X.X"
 	   #define     FIRWARE_DATE  "06/10/2015"    // firmware Date "20/09/2012"
-	   #define     MAKER  "INFOSOFT"             // should be "INFOSOFT"
+	   #define     MAKER  "PRODUCT_MAKER"        // should be "PRODUCT_MAKER"
 
 	Example:
 	   program name: [TESTING]
@@ -35,7 +35,7 @@
 	   PRODUCT_ID: EMU1464
 	   VERSION: 1.2.2
 	   FIRWARE_DATE: 06/10/2015
-	   MAKER: INFOSOFT
+	   MAKER: PRODUCT_MAKER
 
    Note:
       DumpFirmwarepInfoTo(int where) will every 5 seconds dumpping firmware infomation
