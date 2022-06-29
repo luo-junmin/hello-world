@@ -1,0 +1,285 @@
+/****************************************************************************
+	J_firmware_info.lib
+
+	Dump the firmware information to specified devices (Support Serial ports [B,C,D,E]).
+   Serial port setting: 9600 8 N 1
+
+   Dynamic C setting
+   Options -> Project Options -> Defines
+	   _FIRMWARE_NAME_ = "TESTING"
+	   _FIRMWARE_VERSION_ = 0x0102
+	   _FIRMWARE_TIMESTAMP_ = 1136603832
+
+ 	User System Info
+	   #define     PRODUCT_ID  "PID_001"         // part #
+	   #define     VERSION  "1.2.2"              // should be "X.X.X"
+	   #define     FIRWARE_DATE  "06/10/2015"    // firmware Date "20/09/2012"
+	   #define     MAKER  "PRODUCT_MAKER"        // should be "PRODUCT_MAKER"
+
+	Example:
+	   program name: [TESTING]
+	   bytes in firmware: 131440 bytes
+	   board type: 0x3402
+	   MB type: 0x00000000
+	   firmware version: 1.02
+	   compiler version: 10.72
+	   compiler flags:
+	           separate I&D spaces: enabled
+	           include debug instructions (RST28): yes
+	           compile to: FLASH
+	           can load from secondary: no
+	           .bin is: normal
+	   timestamp: 01/07/2016 03:17:12 (1136603832)
+	   header crc32: 0xc6eb0ed9
+
+	   PRODUCT_ID: EMU1464
+	   VERSION: 1.2.2
+	   FIRWARE_DATE: 06/10/2015
+	   MAKER: PRODUCT_MAKER
+
+   Note:
+      DumpFirmwarepInfoTo(int where) will every 5 seconds dumpping firmware infomation
+   to specified serial port. no return due to internal loopping.
+
+Revision History:
+
+ UPDATE HISTORY
+ REV     AUTHOR         DATE     	DESCRIPTION OF CHANGE
+ ---     ----------     ----     	---------------------
+ 1.0.0	Luo Junmin	07/01/2016  	Primary revision
+END DESCRIPTION **********************************************************/
+
+/*** BeginHeader */
+#ifndef __J_FIRMWARE_INFO_LIB
+#define __J_FIRMWARE_INFO_LIB
+/*** EndHeader */
+
+/*** BeginHeader  */
+#define	DUMP_TO_STDO			0
+#define	DUMP_TO_UDP				1
+#define	DUMP_TO_WEB				2
+#define	DUMP_TO_SERIAL_1		3
+#define	DUMP_TO_SERIAL_2		4
+#define	DUMP_TO_SERIAL_3		5
+#define	DUMP_TO_SERIAL_4		6
+
+//extern	PRODUCT_ID;
+//extern   VERSION;
+//extern   FIRWARE_DATE;
+//extern   MAKER;
+/*** EndHeader */
+
+/*** BeginHeader fiDumpInit */
+void fiDumpInit ();
+/*** EndHeader */
+void fiDumpInit ()
+{
+	serEclose();
+	serBclose();
+	serCclose();
+	serDclose();
+	serEopen(9600);
+	serBopen(9600);
+	serCopen(9600);
+	serDopen(9600);
+}
+
+/*** BeginHeader fiDumpTo */
+int fiDumpTo (const __far firmware_info_t *fi, int where);
+/*** EndHeader */
+/* START FUNCTION DESCRIPTION ********************************************
+fiDumpTo 		                 								<firmware_info.lib>
+
+SYNTAX: int fiDumpTo (const far firmware_info_t *fi)
+
+DESCRIPTION:	Dump information stored in firmware_info_t structure, in
+					human-readable form, to stdout.
+
+PARAMETER 1:	Pointer to firmware info retrieved with buGetInfo or
+					fiProgramInfo.
+
+RETURN VALUE:	Error codes shared with fiValidate:
+					 0: Information is valid.
+					-EINVAL: <fi> is NULL.
+					-EILSEQ: Not a valid firmware_info_t struct (bad marker bytes
+								or unsupported version of structure).
+					-EBADMSG: Bad CRC (structure has been corrupted).
+
+SEE ALSO:		firmware_info_t, fiValidate, fiProgramInfo, buGetInfo
+
+END DESCRIPTION **********************************************************/
+#include <time.h>				// for strftime()
+//_fi_debug
+int fiDumpTo (const __far firmware_info_t *fi, int where)
+{
+	auto struct tm	time;
+	auto int error;
+	auto char buffer[60];
+	auto char dbuf[1024];
+   char* p;
+
+	if (!fi)
+	{
+		return -EINVAL;
+	}
+
+	#define _BUDUMPINFO(flag,prompt,en,dis) \
+   	p += strlen(p); \
+		sprintf(p, "\t" prompt ": %s\r\n", \
+		fi->flags & _FIRMINFO_FLAG_ ## flag ? en : dis)
+
+   dbuf[0] = 0;
+   p = &dbuf[0];
+	error = fiValidate( fi);
+	if (error)
+	{
+		//printf( "%s: ERROR! invalid firmware_info_t\n", "fiDump");
+		sprintf(p, "%s: ERROR! invalid firmware_info_t\r\n", "fiDump");
+	}
+   p += strlen(p);
+   sprintf( p, "program name: [%0.20ls]\r\n", fi->program_name);
+   p += strlen(p);
+   sprintf( p, "bytes in firmware: %ld bytes\r\n", fi->length);
+   p += strlen(p);
+   sprintf( p, "board type: 0x%04x\r\n", fi->board_type);
+   p += strlen(p);
+   sprintf( p, "MB type: 0x%08x\r\n", fi->mb_type);
+   p += strlen(p);
+   sprintf( p, "firmware version: %u.%02x\r\n", fi->version >> 8,
+      fi->version & 0x00FF);
+   p += strlen(p);
+   sprintf( p, "compiler version: %u.%02x\r\n", fi->compiler_ver >> 8,
+      fi->compiler_ver & 0x00FF);
+   p += strlen(p);
+   sprintf( p, "compiler flags:\r\n");
+   _BUDUMPINFO(SEP_INST_DATA, "separate I&D spaces", "enabled", "disabled");
+   _BUDUMPINFO(RST28, "include debug instructions (RST28)", "yes", "no");
+   _BUDUMPINFO(RAM_COMPILE, "compile to", "RAM", "FLASH");
+   _BUDUMPINFO(CAN_BE_SECONDARY, "can load from secondary", "yes", "no");
+   _BUDUMPINFO(WRAPPED_BIN, ".bin is", "wrapped", "normal");
+
+   // convert timestamp to text and dump
+	mktm (&time, fi->build_timestamp);
+	strftime( buffer, sizeof buffer, "%c", &time);
+   p += strlen(p);
+   sprintf( p, "timestamp: %s (%lu)\r\n", buffer, fi->build_timestamp);
+   p += strlen(p);
+   sprintf( p, "header crc32: 0x%08lx\r\n", fi->header_crc32);
+
+   p += strlen(p);
+   sprintf( p, "\r\nPRODUCT_ID: %s\r\n", PRODUCT_ID);
+   p += strlen(p);
+   sprintf( p, "VERSION: %s\r\n", VERSION);
+   p += strlen(p);
+   sprintf( p, "FIRWARE_DATE: %s\r\n", FIRWARE_DATE);
+   p += strlen(p);
+   sprintf( p, "MAKER: %s\r\n", MAKER);
+
+   switch (where)
+   {
+     case  DUMP_TO_STDO:
+     		printf("\n%s",dbuf);
+     break;
+
+     case  DUMP_TO_UDP:
+     ;
+     break;
+
+     case  DUMP_TO_WEB:
+     ;
+     break;
+
+     case  DUMP_TO_SERIAL_1:
+     	serDwrite("\r\n",2);
+     	serDwrite(dbuf,strlen(dbuf));
+     break;
+
+     case  DUMP_TO_SERIAL_2:
+     	serCwrite("\r\n",2);
+     	serCwrite(dbuf,strlen(dbuf));
+     break;
+
+     case  DUMP_TO_SERIAL_3:
+     	serBwrite("\r\n",2);
+     	serBwrite(dbuf,strlen(dbuf));
+     break;
+
+     case  DUMP_TO_SERIAL_4:
+     	serEwrite("\r\n",2);
+     	serEwrite(dbuf,strlen(dbuf));
+     break;
+
+     default:
+     		printf("%s",dbuf);
+   }
+
+	return error;
+}
+
+/*** BeginHeader _fiDumpInit */
+void _fiDumpInit(int where);
+/*** EndHeader */
+void _fiDumpInit(int where)
+{
+	switch (where)
+   {
+	   case  DUMP_TO_STDO:
+     	break;
+
+	   case  DUMP_TO_UDP:
+     	break;
+
+	   case  DUMP_TO_WEB:
+     	break;
+
+	   case  DUMP_TO_SERIAL_1:
+	      serDclose();
+	      serDopen(9600);
+     	break;
+
+	   case  DUMP_TO_SERIAL_2:
+         serCclose();
+         serCopen(9600);
+     	break;
+
+	   case  DUMP_TO_SERIAL_3:
+         serBclose();
+         serBopen(9600);
+     	break;
+
+	   case  DUMP_TO_SERIAL_4:
+         serEclose();
+         serEopen(9600);
+     	break;
+
+      default:
+   }
+}
+
+/*** BeginHeader DumpFirmwarepInfoTo */
+void DumpFirmwarepInfoTo(int where);
+/*** EndHeader */
+void DumpFirmwarepInfoTo(int where)
+{
+	int i,v;
+	firmware_info_t	fi;
+
+   serCclose();
+	serCopen(9600);
+   i = where;
+   _fiDumpInit(i);
+   v = fiProgramInfo( &fi);
+   for (;;)
+   {
+      costate {
+         waitfor(DelayMs(5000));
+         fiDumpTo( &fi, DUMP_TO_STDO);
+         fiDumpTo( &fi, i);
+      }
+   }
+}
+
+/*** BeginHeader */
+#endif
+/*** EndHeader */
+
